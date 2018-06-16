@@ -610,7 +610,7 @@ class StdLP:
                         print((' ' * lvl) + '[Optimal]', self.opt_val)
                 else:
                     # Prune branch
-                    print((' '*lvl) + '[Pruned]')
+                    print((' '*lvl) + '[Pruned]', self.opt_val, '<=', self.bb_best_val)
 
     def apply_branch_and_bound(self, basis_map):
         ''' Applies the branch and bound method recursively
