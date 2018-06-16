@@ -20,7 +20,7 @@ $ pipenv shell
 
 # Uso
 
-O programa `simplex.py` resolve programações lineares e pode ser chamado como segue (TP1):
+O programa correspondente ao TP1, `simplex.py` resolve programações lineares e pode ser chamado como segue:
 ```bash
 $ ./simplex.py entrada.txt
 ```
@@ -30,7 +30,7 @@ Ou passando a entrada via `stdin`:
 $ ./simplex.py < entrada.txt
 ```
 
-As duas maneiras também são válidas para o programa `integer_programming.py`, que resolve programações inteiras (TP2):
+As duas maneiras de chamada também são válidas para o programa do TP2, `integer_programming.py`, que resolve programações inteiras:
 ```bash
 $ ./integer_programming.py entrada.txt
 $ ./integer_programming.py < entrada.txt
