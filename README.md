@@ -20,7 +20,7 @@ $ pipenv shell
 
 # Uso
 
-O programa pode ser chamado como especificado:
+O programa `simplex.py` resolve programações lineares e pode ser chamado como segue (TP1):
 ```bash
 $ ./simplex.py entrada.txt
 ```
@@ -28,6 +28,12 @@ $ ./simplex.py entrada.txt
 Ou passando a entrada via `stdin`:
 ```bash
 $ ./simplex.py < entrada.txt
+```
+
+As duas maneiras também são válidas para o programa `integer_programming.py`, que resolve programações inteiras (TP2):
+```bash
+$ ./integer_programming.py entrada.txt
+$ ./integer_programming.py < entrada.txt
 ```
 
 É possível ainda incluir a biblioteca `simplex` em outros programas a fim de utilizar a classe `StdLP`:
