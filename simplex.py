@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from fractions import Fraction as ff
+from math import floor, ceil
 from enum import IntEnum
 import numpy as np
 import sys
@@ -7,7 +8,7 @@ import sys
 '''
 
     [DCC-UFMG]
-    Assignment: TP1 - Simplex
+    Assignment: TP1 & TP2 - Linear & Integer Programming
     Student: Artur Marzano
     Class: Operations Research (18/1)
 
@@ -48,11 +49,17 @@ class StdLP:
     def __init__(self, M, debug=False, pretty=False, logfile=None):
         ''' Stores the LP and preferences. '''
 
-        self._M = StdLP.append_log(M.copy())
+        self.M = M
+        self.Mx = StdLP.append_log(M.copy())
 
         self.opt_vec = None
         self.opt_val = None
         self.cert = None
+
+        self.lr_opt_vec = None
+        self.lr_opt_val = None
+        self.bb_best_vec = None
+        self.bb_best_val = None
 
         self.debug = debug
         self.pretty = pretty
@@ -81,7 +88,7 @@ class StdLP:
             sep = ', '
             wrap = ['[', ']']
 
-        return StdLP.printable(self._M, sep, wrap)
+        return StdLP.printable(self.Mx, sep, wrap)
 
     @staticmethod
     def fidentity(n):
@@ -162,7 +169,7 @@ class StdLP:
             from another row if M[i, j] is zero.
         '''
 
-        M = self._M
+        M = self.Mx
         h, w = M.shape
         elem = M[i, j]
 
@@ -193,7 +200,7 @@ class StdLP:
     def pick_primal_pivot(self):
         ''' Picks a pivot to be used by a primal Simplex. '''
 
-        M = self._M
+        M = self.Mx
         h, w = M.shape
 
         min_ratio = -1
@@ -232,7 +239,7 @@ class StdLP:
     def pick_dual_pivot(self):
         ''' Picks a pivot to be used by a dual Simplex. '''
 
-        M = self._M
+        M = self.Mx
         h, w = M.shape
 
         min_ratio = -1
@@ -272,21 +279,21 @@ class StdLP:
         ''' Sets up the optimal result given a final tableau
             and the basis. '''
 
-        h, w = self._M.shape
+        h, w = self.Mx.shape
 
         # Optimal value.
-        self.opt_val = self._M[0, -1]
+        self.opt_val = self.Mx[0, -1]
 
         # Optimal vector.
         self.opt_vec = np.matrix([ff(0)]*w)
         for row in basis_map:
-            self.opt_vec[0, basis_map[row]] = self._M[row, -1]
+            self.opt_vec[0, basis_map[row]] = self.Mx[row, -1]
 
         # Delete log and slack entries from optimal vector.
         self.opt_vec = self.opt_vec[0, h-1:-h]
 
         # Certificate of optimality.
-        self.cert = self._M[0, :h-1]
+        self.cert = self.Mx[0, :h-1]
 
     def pivoting_loop(self, pivot_picker, basis_map):
         ''' Generic pivoting loop for all kinds of Simplexes.
@@ -313,7 +320,7 @@ class StdLP:
         ''' Checks if a basis_map really
             corresponds to a canonical basis. '''
 
-        M = self._M
+        M = self.Mx
         h, w = M.shape
 
         for pivot in range(1, h):
@@ -331,7 +338,7 @@ class StdLP:
         ''' Applies primal simplex to the matrix
             using a feasible basis. '''
 
-        M = self._M
+        M = self.Mx
         h, w = M.shape
 
         try:
@@ -361,16 +368,12 @@ class StdLP:
 
         return status
 
-    def apply_dual_simplex(self):
+    def apply_dual_simplex(self, basis_map):
         ''' Applies dual simplex to the matrix. '''
-
-        M = self._M
+        M = self.Mx
         h, w = M.shape
 
         try:
-            # Dual simplex aims to find a basis, so it starts empty
-            basis_map = {}
-
             # Apply pivoting loop using dual pivot picker
             self.pivoting_loop(self.pick_dual_pivot, basis_map)
 
@@ -392,18 +395,18 @@ class StdLP:
         ''' Solves an auxiliary LP to find a
             feasible basis for some original LP. '''
 
-        h, w = self._M.shape
+        h, w = self.Mx.shape
 
         # Save original matrix.
-        self._Mp = self._M.copy()
+        self.Mxp = self.Mx.copy()
 
         # Make b positive.
         for y in range(1, h):
-            if self._M[y, -1] < 0:
-                self._M[y] *= -1
+            if self.Mx[y, -1] < 0:
+                self.Mx[y] *= -1
 
         # Build aux from tableau.
-        self._M = StdLP.build_aux(self._M)
+        self.Mx = StdLP.build_aux(self.Mx)
 
         # Build aux_basis_map and restore canonical basis
         # pivoting the aux columns.
@@ -430,32 +433,37 @@ class StdLP:
 
             The basis_map parameter is a row->col map
             representing the canonical basis for the primal Simplex,
-            if the LP is in primal format.  Otherwise, basis_map is ignored.
+            if the LP is in primal format. Otherwise, basis_map is ignored.
         '''
 
         try:
+            dual_basis_map = {}
+
             # Apply dual simplex.
-            status = self.apply_dual_simplex()
+            status = self.apply_dual_simplex(dual_basis_map)
+
+            basis_map.update(dual_basis_map)
         except FormatException as e:
             try:
                 # Apply primal simplex.
                 status = self.apply_primal_simplex(basis_map)
             except FormatException as e:
                 # Apply simplex to aux LP to obtain feasible basis.
-                h, w = self._M.shape
+                h, w = self.Mx.shape
 
                 aux_basis_map = self.find_feasible_basis()
 
                 if self.opt_val == 0:
                     # Original LP feasible.
-                    # Restore original matrix applying autofix to pivoting
-                    self._M = self._Mp
+                    # Restore original matrix applying autofix to pivoting.
+                    self.Mx = self.Mxp
                     for line in aux_basis_map:
                         col = aux_basis_map[line]
                         self.pivot(line, col, autofix=True)
 
                     # Apply simplex with canonical basis.
                     status = self.apply_primal_simplex(aux_basis_map)
+                    basis_map.update(aux_basis_map)
                 else:
                     # Original LP infeasible.
 
@@ -468,6 +476,220 @@ class StdLP:
             print(self, '\n')
 
         return status
+
+    def add_restriction(self, restriction_row, basis_map, slack=0):
+        '''
+            Adds a new restriction to an already found solution.
+            slack may be set to 0 (=), 1 (<=) or -1 (>=).
+        '''
+
+        if self.opt_val is None:
+            return
+        h, w = self.Mx.shape
+
+        # Add the restriction and slack variables.
+        slack_col = np.matrix(np.zeros(shape=(h+1, 1), dtype='object'))
+        slack_col[-1, 0] = ff(slack)
+
+        self.Mx = np.concatenate([self.Mx, restriction_row])
+        self.Mx = np.concatenate([
+            self.Mx[:, :h-1], slack_col, self.Mx[:, h-1:-1],
+            slack_col, self.Mx[:, -1]
+        ], axis=1)
+
+        if self.debug:
+            print('[Add restriction (' + str(slack) + ')]', StdLP.printable(restriction_row))
+            print(self)
+
+        # Adjust map and restore basis.
+        basis_map[h] = w-1
+        for row in basis_map:
+            basis_map[row] += 1
+
+            col = basis_map[row]
+            self.pivot(row, col)
+
+        if self.debug:
+            print('[Basis]', basis_map)
+
+        # Restore solution if needed.
+        status = self.apply_dual_simplex(basis_map)
+        return status
+
+    @staticmethod
+    def all_integer(vec):
+        h, w = vec.shape
+
+        for x in range(w):
+            if vec[0, x].denominator != 1:
+                return False
+
+        return True
+
+    def _apply_bb_rec(self, Mo, basis_map, lvl=0):
+        ''' Heavy work for recursive branch and bound. '''
+
+        M = Mo.copy()
+        h, w = M.shape
+
+        for row in range(1, h):
+            # Skip integer entries.
+            if M[row, -1].denominator == 1:
+                continue
+
+            # Skip slack variables.
+            col = basis_map[row]
+            if col >= w-h:
+                continue
+
+            # Build 1st restriction
+            r1 = M[row, :].copy()
+            for x in range(w):
+                r1[0, x] = 0
+            r1[0, col] = 1
+            r1[0, -1] = floor(M[row, -1])
+
+            print((' ' * lvl) + '[Branch] x_' + str(col-h+1) + ' <= ' + str(r1[0, -1]))
+
+            # Copy basis and input matrix
+            basis = dict()
+            basis.update(basis_map)
+            self.Mx = M.copy()
+
+            # Add 1st restriction
+            status = self.add_restriction(r1, basis, slack=1)
+
+            if self.debug:
+                print(self)
+
+            # Left branch
+            if status == Status.OPTIMAL:
+                if not self.bb_best_val or self.opt_val > self.bb_best_val:
+                    if StdLP.all_integer(self.opt_vec):
+                        # Update solution
+                        self.bb_best_val = self.opt_val
+                        self.bb_best_vec = self.opt_vec
+                    else:
+                        # Explore branch
+                        self._apply_bb_rec(self.Mx, basis, lvl=lvl+1)
+                        print((' ' * lvl) + '[Optimal]', self.opt_val)
+                else:
+                    # Prune branch
+                    print((' '*lvl) + '[Pruned]')
+
+            # Build 2nd restriction
+            r2 = M[row, :].copy()
+            for x in range(w):
+                r2[0, x] = 0
+            r2[0, col] = 1
+            r2[0, -1] = ceil(M[row, -1])
+
+            print((' ' * lvl) + '[Branch] x_' + str(col-h+1) + ' >= ' + str(r2[0, -1]))
+
+            # Copy basis and input matrix
+            basis = dict()
+            basis.update(basis_map)
+            self.Mx = M.copy()
+
+            # Add 2nd restriction
+            status = self.add_restriction(r2, basis, slack=-1)
+            if self.debug:
+                print(self)
+                print('[' + str(status) + ']')
+
+            # Right branch
+            if status == Status.OPTIMAL:
+                if not self.bb_best_val or self.opt_val > self.bb_best_val:
+                    if StdLP.all_integer(self.opt_vec):
+                        # Update solution
+                        self.bb_best_val = self.opt_val
+                        self.bb_best_vec = self.opt_vec
+                    else:
+                        # Explore branch
+                        self._apply_bb_rec(self.Mx, basis, lvl=lvl+1)
+                        print((' ' * lvl) + '[Optimal]', self.opt_val)
+                else:
+                    # Prune branch
+                    print((' '*lvl) + '[Pruned]')
+
+    def apply_branch_and_bound(self, basis_map):
+        ''' Applies the branch and bound method recursively
+            to solve the integer programming problem.
+        '''
+
+        # Apply Simplex to linear relaxation.
+        status = self.apply_simplex(basis_map)
+        if status != Status.OPTIMAL:
+            return status
+
+        # Save results for linear relaxation.
+        self.lr_cert = self.cert.copy()
+        self.lr_opt_vec = self.opt_vec.copy()
+        self.lr_opt_val = self.opt_val
+
+        self._apply_bb_rec(self.Mx, basis_map)
+
+        self.opt_val = self.bb_best_val
+        self.opt_vec = self.bb_best_vec
+
+        return Status.OPTIMAL
+
+    def apply_cutting_plane(self, basis_map):
+        ''' Applies the cutting plane method to solve
+            the integer programming problem. '''
+
+        # Apply simplex to linear relaxation.
+        status = self.apply_simplex(basis_map)
+
+        # Cancel method if not optimal
+        if status != Status.OPTIMAL:
+            return status
+
+        # Save results for linear relaxation.
+        self.lr_cert = self.cert.copy()
+        self.lr_opt_vec = self.opt_vec.copy()
+        self.lr_opt_val = self.opt_val
+
+        last = status
+        integer = False
+        c = 1
+        while not integer:
+            # Get dimensions.
+            h, w = self.Mx.shape
+
+            # Assume this is the last iteration of the loop.
+            integer = True
+            for y in range(1, h):
+                # Skip integer entries and slack variables
+                if self.Mx[y, -1].denominator == 1 or basis_map[y] >= w-h:
+                    continue
+
+                # Break loop assumption.
+                integer = False
+
+                # Pick fractional entry.
+                row = y
+
+                print('[Cutting plane', c, 'for row '+ str(row) + ']')
+
+                # Build restriction.
+                restriction = self.Mx[row, :].copy()
+                for x in range(w):
+                    if x >= h-1:
+                        restriction[0, x] = ff(floor(restriction[0, x]))
+                    else:
+                        restriction[0, x] = 0
+
+                # Enforce restriction on existing solution.
+                last = self.add_restriction(restriction, basis_map, slack=1)
+                print('[Optimal]', self.Mx[0, -1])
+
+                if self.debug:
+                    print(self)
+
+                c += 1
+
+        return last
 
 
 if __name__ == '__main__':
