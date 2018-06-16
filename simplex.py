@@ -572,7 +572,7 @@ class StdLP:
                     else:
                         # Explore branch
                         self._apply_bb_rec(self.Mx, basis, lvl=lvl+1)
-                        print((' ' * lvl) + '[Optimal]', self.opt_val)
+                    print((' ' * lvl) + '[Optimal]', self.opt_val)
                 else:
                     # Prune branch
                     print((' '*lvl) + '[Pruned]')
