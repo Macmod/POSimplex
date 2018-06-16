@@ -33,7 +33,7 @@ if __name__ == '__main__':
     # Instantiate LP problem.
     problem = StdLP(
         std_matrix, logfile='pivoting.txt',
-        debug=False, pretty=True
+        debug=False, pretty=False
     )
 
     # Solve
