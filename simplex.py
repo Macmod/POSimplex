@@ -627,10 +627,14 @@ class StdLP:
         self.lr_opt_vec = self.opt_vec.copy()
         self.lr_opt_val = self.opt_val
 
-        self._apply_bb_rec(self.Mx, basis_map)
+        if not StdLP.all_integer(self.opt_vec):
+            self._apply_bb_rec(self.Mx, basis_map)
 
-        self.opt_val = self.bb_best_val
-        self.opt_vec = self.bb_best_vec
+            self.opt_val = self.bb_best_val
+            self.opt_vec = self.bb_best_vec.copy()
+        else:
+            self.opt_val = self.lr_opt_val
+            self.opt_vec = self.lr_opt_vec.copy()
 
         return Status.OPTIMAL
 
