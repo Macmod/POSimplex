@@ -477,6 +477,24 @@ class StdLP:
 
         return status
 
+    def restore_solution_after_restriction(self, basis_map):
+        '''
+            Adjust tableau to restore solution after
+            adding a new restriction.
+        '''
+
+        # Adjust map and restore basis.
+        for row in basis_map:
+            col = basis_map[row]
+            self.pivot(row, col)
+
+        if self.debug:
+            print('[Basis]', basis_map)
+
+        # Restore solution if needed.
+        status = self.apply_dual_simplex(basis_map)
+        return status
+
     def add_restriction(self, restriction_row, basis_map, slack=0):
         '''
             Adds a new restriction to an already found solution.
@@ -501,20 +519,9 @@ class StdLP:
             print('[Add restriction (' + str(slack) + ')]', StdLP.printable(restriction_row))
             print(self)
 
-        # Adjust map and restore basis.
         basis_map[h] = w-1
         for row in basis_map:
             basis_map[row] += 1
-
-            col = basis_map[row]
-            self.pivot(row, col)
-
-        if self.debug:
-            print('[Basis]', basis_map)
-
-        # Restore solution if needed.
-        status = self.apply_dual_simplex(basis_map)
-        return status
 
     @staticmethod
     def all_integer(vec):
@@ -545,9 +552,9 @@ class StdLP:
             # Build 1st restriction
             r1 = M[row, :].copy()
             for x in range(w):
-                r1[0, x] = 0
-            r1[0, col] = 1
-            r1[0, -1] = floor(M[row, -1])
+                r1[0, x] = ff(0)
+            r1[0, col] = ff(1)
+            r1[0, -1] = ff(floor(M[row, -1]))
 
             print((' ' * lvl) + '[Branch] x_' + str(col-h+1) + ' <= ' + str(r1[0, -1]))
 
@@ -557,8 +564,11 @@ class StdLP:
             self.Mx = M.copy()
 
             # Add 1st restriction
-            status = self.add_restriction(r1, basis, slack=1)
-
+            self.add_restriction(r1, basis, slack=1)
+            # Restore basis (optimized, just need to pivot branch var)
+            self.pivot(row, basis[row])
+            # Restore solution if needed
+            status = self.apply_dual_simplex(basis)
             if self.debug:
                 print(self)
 
@@ -580,9 +590,9 @@ class StdLP:
             # Build 2nd restriction
             r2 = M[row, :].copy()
             for x in range(w):
-                r2[0, x] = 0
-            r2[0, col] = 1
-            r2[0, -1] = ceil(M[row, -1])
+                r2[0, x] = ff(0)
+            r2[0, col] = ff(1)
+            r2[0, -1] = ff(ceil(M[row, -1]))
 
             print((' ' * lvl) + '[Branch] x_' + str(col-h+1) + ' >= ' + str(r2[0, -1]))
 
@@ -592,7 +602,12 @@ class StdLP:
             self.Mx = M.copy()
 
             # Add 2nd restriction
-            status = self.add_restriction(r2, basis, slack=-1)
+            self.add_restriction(r2, basis, slack=-1)
+            # Restore basis (optimized, just need to pivot branch var and slack)
+            self.pivot(row, basis[row])
+            self.pivot(h, w)
+            # Restore solution if needed
+            status = self.apply_dual_simplex(basis)
             if self.debug:
                 print(self)
                 print('[' + str(status) + ']')
@@ -685,7 +700,8 @@ class StdLP:
                         restriction[0, x] = 0
 
                 # Enforce restriction on existing solution.
-                last = self.add_restriction(restriction, basis_map, slack=1)
+                self.add_restriction(restriction, basis_map, slack=1)
+                last = self.restore_solution_after_restriction(basis_map)
                 print('[Optimal]', self.Mx[0, -1])
 
                 if self.debug:
