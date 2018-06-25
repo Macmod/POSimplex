@@ -725,7 +725,10 @@ if __name__ == '__main__':
     matrix_line = fin.readline().strip()
 
     # Build input matrix & canonical basis.
-    matrix = np.matrix(matrix_line).reshape(m+1, n+1) + ff()
+    matrix = np.matrix(matrix_line, dtype='object').reshape(m+1, n+1)
+    for i in range(0, m+1):
+        for j in range(0, n+1):
+            matrix[i, j] = ff(matrix[i, j])
 
     A = matrix[1:]
     c = matrix[0]
